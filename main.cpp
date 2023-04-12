@@ -1,11 +1,34 @@
 //Generate a soft ray tracing with opengl and glfw
 #include <iostream>
 #include <fstream>
-#include "vec3.h"
 #include "color.h"
-#include "ray.h"
+#include "utils.h"
+#include "hittable_list.h"
+#include "sphere.h"
+#include "camera.h"
 
-color ray_color(const ray& r) {
+//Determine whether the light intersects with the sphere
+// Move to sphere.h
+/* double hit_sphere(const ray& r, const point3& center, double radius) {
+	vec3 v = r.origin() - center;
+	double a = dot(r.direction(), r.direction());
+	// double b = 2 * dot(v, r.direction());
+	//Simplify interection
+	double half_b = dot(v, r.direction());
+	double c = dot(v, v) - radius * radius;
+	double discriminat = half_b * half_b - a * c;
+	if (discriminat < 0)
+		return -1.0;
+	else
+		return (-half_b - sqrt(discriminat)) / a;
+} */
+
+color ray_color(const ray& r, const hittable_list& world) {
+	hit_record rec;
+	if (world.hit(r, 0, infinity, rec)) {
+		return 0.5 * (rec.normal + color(1, 1, 1));
+	}
+	//Render background
 	vec3 unit_direction = unit_vector(r.direction());
 	double t = 0.5 * (unit_direction.y() + 1.0); //y in [-1,1], so it should add 1 and multiply 0.5 to convert t into [0, 1], so that t can be used as a interpolation parameter;
 	return (1.0 - t) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
@@ -15,18 +38,26 @@ color ray_color(const ray& r) {
 int main(){
 	//Image
 	const double aspect_ratio = 16.0 / 9.0;
-	const int image_width = 400;
+	const int image_width = 1200;
 	const int image_height = static_cast<int>(image_width / aspect_ratio);
+	const int samples_per_pixel = 100;
+
+	//World
+	hittable_list world;
+	world.add(make_shared<sphere>(point3(0, 0, -1), 0.5));
+	world.add(make_shared<sphere>(point3(0, -100.5, -1), 100));
 
 	//Camera
-	double viewport_height = 2.0;
-	double viewport_width = aspect_ratio * viewport_height;
-	double focal_length = 1.0;
+	//Move to camera.h
+	//double viewport_height = 2.0;
+	//double viewport_width = aspect_ratio * viewport_height;
+	//double focal_length = 1.0;
 
-	point3 origin(0, 0, 0);
-	vec3 horizontal(viewport_width, 0, 0);
-	vec3 vertical(0, viewport_height, 0);
-	point3 lower_left_corner = origin - horizontal / 2 - vertical / 2 - vec3(0, 0, focal_length);
+	//point3 origin(0, 0, 0);
+	//vec3 horizontal(viewport_width, 0, 0);
+	//vec3 vertical(0, viewport_height, 0);
+	//point3 lower_left_corner = origin - horizontal / 2 - vertical / 2 - vec3(0, 0, focal_length);
+	camera cam;
 
 	//Render
 	std::ofstream file("image.ppm");
@@ -34,15 +65,16 @@ int main(){
 	for (int j = image_height - 1; j >= 0; j--) {
 		std::cerr << "\rScanlines remaining: " << j << ' ' << std::flush;
 		for (int i = 0; i < image_width; i ++) {
-			//Compute ray direction
-			//screen coordinate project to viewport
-			double u = double(i) / (image_width - 1);
-			double v = double(j) / (image_height - 1);
-			
-			vec3 ray_direction = lower_left_corner + u * horizontal + v * vertical - origin;
-			ray r(origin, ray_direction);
-			color pixel_color = ray_color(r);
-			write_color(file, pixel_color);
+			color pixel_color;
+			for (int s = 0; s < samples_per_pixel; s++) {
+				//Compute ray direction
+				//screen coordinate project to viewport
+				double u = double(i + random_double()) / (image_width - 1);
+				double v = double(j + random_double()) / (image_height - 1);
+				ray r = cam.get_ray(u,v);
+				pixel_color += ray_color(r, world);
+			}
+			write_color(file, pixel_color, samples_per_pixel);
 		}
 	}
 	std::cerr << "\nDone.\n";
